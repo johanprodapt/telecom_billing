@@ -1,0 +1,324 @@
+Modules:
+1. Customer Management
+Operations:
+	Add/Edit/Delete Customer
+	View Customer Profile
+Tables:
+Customer(id, name, email, address, aadhaar_number, status)
+MobileNumber(id, customer_id, phone, status, assigned_date)
+
+AddCustomer(name, email, aadhaar, phones):
+    Validate email and Aadhaar uniqueness
+	res = ValidateAadhaarOnRegistration -- To check if entered aadhar is a banned one or not 
+		if yes:
+			return res
+    Create Customer record
+    For each phone:
+        Ensure not active elsewhere
+        Create MobileNumber record
+
+EditCustomer(customer_id, updates):
+    Fetch and update fields
+
+DeleteCustomer(customer_id):
+    Mark MobileNumbers as Inactive
+    Delete or archive Customer
+
+ViewCustomer(customer_id):
+    Fetch Customer and MobileNumbers
+
+2. Plan Management
+Operations:
+Create/Update/Delete Mobile Plans
+
+Table:
+Plan(id, name, type, monthly_fee, data_limit, call_limit)
+
+CreatePlan(name, type, fee, data_limit, call_limit):
+    Validate type
+    Insert into Plan
+
+UpdatePlan(plan_id, updates):
+    Fetch and apply changes
+
+DeletePlan(plan_id):
+    Ensure no active customers using it
+    Delete or mark inactive
+
+
+3. Usage Tracking
+Operations:
+Add call/data usage
+View usage per customer
+
+Table:
+Usage(id, customer_id, month, call_minutes_used, data_used_gb)
+
+AddUsage(customer_id, month, call, data):
+    If usage exists:
+        Update usage
+    Else:
+        Create new usage record
+
+ViewUsage(customer_id):
+    Fetch usage records by customer
+	
+4. Billing MODULE
+
+Operations:
+Monthly bill generation
+Tax/surcharge calculation
+PDF or html recipt generation
+
+Table:
+Bill(bill_id, customer_id, month, total_amount, due_date, status)
+
+GenerateBill(customer_id, month):
+    Fetch plan and usage
+    Calculate base fee
+    Add extra charges if limits exceeded
+    Apply tax/surcharge
+    Create bill with status "Unpaid"
+
+GenerateBillDocument(bill_id, format):
+    Fetch bill details
+    Render PDF or HTML
+
+5. Payment Module
+Operations:
+Payment status
+Reminders
+Late payment penalty
+
+Table
+Payment(payment_id, bill_id, date, amount, mode)
+
+MakePayment(bill_id, amount, mode, date):
+    Apply late fee if overdue
+    Validate amount
+    Record payment
+    Update bill status to "Paid"
+
+SendPaymentReminder():
+    For unpaid bills nearing due date:
+        Notify customer
+		
+6. Service Control
+Operations:
+Deactivate/reactivate customer
+Permanent disconnection
+Aadhaar ban for long-term non-payment
+
+Table:
+BannedAadhaar(aadhaar_number, banned_date, reason)
+
+DeactivateCustomer(customer_id):
+    Update status to "Inactive"
+
+ReactivateCustomer(customer_id):
+    If unpaid bills exist:
+        Deny reactivation
+    Else:
+        Update status to "Active"
+
+DisconnectCustomer(customer_id):
+    If unpaid bills:
+        Deny disconnection
+    Else:
+        Update status to "Disconnected"
+
+BanAadhaarIfOverdue(customer_id, current_date):
+    If bills overdue > 6 months:
+        Add Aadhaar to BannedAadhaar
+        Update customer status to "Banned"
+
+ValidateAadhaarOnRegistration(aadhaar_number):
+    If in BannedAadhaar:
+        Deny registration
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+#These are the coverage of all the given test cases:
+1. TC01	- Add a new customer
+We can have 2 tables, one for customer and one for storing numbers linked to the customer. Eg: Cusomter tabls and sim_number table
+
+Function add_customer(name, phone, email, plan_id):
+    If phone or email already exists in database:
+        Return error "Customer already exists"
+    
+    If plan_id is invalid:
+        Return error "Invalid plan selected"
+    
+    Generate unique customer_id
+    Create customer record with status = "Active"
+    Return success with customer_id
+
+
+# DELTE Customer
+Function delete_mobile_number(phone):
+    Fetch MobileNumber record
+
+    If not found or already inactive:
+        Return error "Number not found or already inactive"
+
+    Update status = "Inactive"
+    Remove customer_id association (optional)
+
+    Return success "Number deactivated and available for reuse"
+	
+	
+TC02 - Assigning postpaid plan to customer
+
+Function assign_plan(customer_id, plan_id):
+    If customer_id not found:
+        Return error "Customer not found"
+    
+    If plan_id not found or not postpaid:
+        Return error "Invalid or non-postpaid plan"
+    
+    Update customer's plan_id
+    Return success "Plan assigned"
+	
+	
+TC03 - Add call/data usage
+Function add_usage(customer_id, month, call_minutes, data_gb):
+    If customer_id not found:
+        Return error "Customer not found"
+    
+    If usage already exists for month:
+        Update existing usage record
+    Else:
+        Create new usage record
+    
+    Return success "Usage recorded"
+
+
+TC04: Generate Bill for the Customer
+Function generate_bill(customer_id, month):
+    Fetch customer and plan
+    Fetch usage for the month
+    
+    If no usage found:
+        Set usage = 0
+    
+    Calculate base fee from plan
+    Calculate extra charges:
+        If call_minutes > plan.call_limit:
+            Add extra_call_charge
+        If data_gb > plan.data_limit:
+            Add extra_data_charge
+    
+    Calculate tax and surcharge
+    total_amount = base_fee + extras + tax
+    
+    Create bill with status = "Unpaid"
+    Return bill details
+
+
+
+ TC05: Make a Payment
+Function make_payment(bill_id, amount, mode):
+    Fetch bill
+    
+    If bill not found:
+        Return error "Bill not found"
+    
+    If bill.status == "Paid":
+        Return error "Bill already paid"
+    
+    If amount < bill.total_amount:
+        Return error "Insufficient payment"
+    
+    Record payment
+    Update bill status to "Paid"
+    Generate receipt
+    Return success with receipt
+
+
+TC06: Exceeding Plan Limits (Postpaid)
+Function calculate_extra_charges(customer_id, month):
+    Fetch plan and usage
+    
+    extra_call = max(0, usage.call_minutes - plan.call_limit)
+    extra_data = max(0.0, usage.data_gb - plan.data_limit)
+    
+    extra_call_charge = extra_call * rate_per_minute
+    extra_data_charge = extra_data * rate_per_gb
+    
+    Return extra_call_charge + extra_data_charge
+
+
+
+SERVICE CONTROL MODULE
+
+Customer: id, name, aadhaar_number, email, status
+BannedAadhaar: aadhaar_number, banned_date, reason - ADDED THIS TABLE TO PREVENT USERS WHO HAVE BEEN BANNED 
+
+Function deactivate_customer(customer_id):
+    Fetch customer
+    
+    If customer not found:
+        Return error "Customer not found"
+    
+    If customer.status == "Inactive":
+        Return error "Customer already inactive"
+    
+    Update customer.status = "Inactive"
+    Return success "Customer temporarily deactivated"
+	
+
+Function reactivate_customer(customer_id):
+    Fetch customer
+    
+    If customer not found:
+        Return error "Customer not found"
+    
+    If customer.status == "Active":
+        Return error "Customer already active"
+    
+    If unpaid bills exist:
+        Return error "Cannot reactivate until dues are cleared"
+    
+    Update customer.status = "Active"
+    Return success "Customer reactivated"
+	
+Function disconnect_customer(customer_id):
+    Fetch customer
+    
+    If customer not found:
+        Return error "Customer not found"
+    
+    If unpaid bills exist:
+        Return error "Cannot disconnect with pending dues"
+    
+    Update customer.status = "Disconnected"
+    Optionally archive or delete customer record
+    Return success "Customer permanently disconnected"
+	
+Function check_and_ban_aadhaar(customer_id, current_date):
+    Fetch customer and all unpaid bills
+    
+    overdue_bills = filter(bills where current_date - bill.due_date > 180 days)
+    
+    If length(overdue_bills) >= 1:
+        Add customer.aadhaar_number to BannedAadhaar table
+        Update customer.status = "Banned"
+        Return success "Aadhaar permanently banned due to long-term non-payment"
+    Else:
+        Return "No action - bills not overdue beyond 6 months"
+		
+Function validate_aadhaar_before_registration(aadhaar_number):
+    If aadhaar_number exists in BannedAadhaar:
+        Return error "This Aadhaar is permanently banned from telecom services"
+    
+    Proceed with registration
+
+
+
+
+
+
